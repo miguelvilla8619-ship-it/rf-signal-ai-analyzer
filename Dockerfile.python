@@ -1,0 +1,28 @@
+# Python - Signal Analysis & Scanner
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    make \
+    libffi-dev \
+    libssl-dev \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY src ./src
+COPY models ./models 2>/dev/null || true
+
+# Create logs directory
+RUN mkdir -p /app/logs
+
+# Run scanner
+CMD ["python", "src/hidden_device_scanner.py"]

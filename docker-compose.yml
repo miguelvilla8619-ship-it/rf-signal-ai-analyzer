@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # Backend API Server
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: rf-signal-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/rf-signals
+      - REDIS_URL=redis://redis:6379
+      - API_PORT=5000
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - ./backend:/app/backend
+      - ./src:/app/src
+    networks:
+      - rf-signal-network
+    restart: unless-stopped
+
+  # Python Signal Analyzer
+  analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    container_name: rf-signal-analyzer
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MONGODB_URI=mongodb://mongodb:27017/rf-signals
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongodb
+      - redis
+      - backend
+    volumes:
+      - ./src:/app/src
+      - ./models:/app/models
+      - ./logs:/app/logs
+    networks:
+      - rf-signal-network
+    restart: unless-stopped
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: rf-signal-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=rfSignal2024
+      - MONGO_INITDB_DATABASE=rf-signals
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - rf-signal-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: rf-signal-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - rf-signal-network
+    restart: unless-stopped
+
+  # Web Dashboard (Optional)
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: rf-signal-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000/api
+      - REACT_APP_WS_URL=ws://localhost:5000
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app/frontend
+    networks:
+      - rf-signal-network
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  rf-signal-network:
+    driver: bridge
